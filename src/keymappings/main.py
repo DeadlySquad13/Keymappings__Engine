@@ -1,3 +1,4 @@
+import builtins
 from pynput import keyboard
 import subprocess
 
@@ -35,42 +36,48 @@ class Keymapping:
         }]
 
 
-    def add_keymappings(self, keymapping):
-        self.KEYMAPPINGS.append(keymapping)
+    def add_keymappings(self, keymappings):
+        match type(keymappings):
+            case builtins.list:
+                self.KEYMAPPINGS += keymappings
+            case _:
+                self.KEYMAPPINGS.append(keymappings)
 
         return self
 
 
 pressed = []
 km = Keymapping()
-km.add_keymappings({
-    "key_sequences": [
-        [{keyboard.Key.ctrl_l, keyboard.KeyCode(char="w")}],
-        [{keyboard.Key.ctrl_l, keyboard.KeyCode(char="W")}],
-    ],
-    "command": lambda: print("TEST"),
-})
-km.add_keymappings({
-    "key_sequences": [
-        [{keyboard.Key.ctrl_l, keyboard.KeyCode(char="w")},
-         {keyboard.Key.ctrl_l, keyboard.KeyCode(char="a")}],
-    ],
-    "command": lambda: print("KEK"),
-})
-km.add_keymappings({
+km.add_keymappings([
+    {
+        "key_sequences": [
+            [{keyboard.Key.ctrl_l, keyboard.KeyCode(char="w")}],
+            [{keyboard.Key.ctrl_l, keyboard.KeyCode(char="W")}],
+        ],
+        "command": lambda: print("TEST"),
+    },
+    {
+        "key_sequences": [
+            [{keyboard.Key.ctrl_l, keyboard.KeyCode(char="w")},
+             {keyboard.Key.ctrl_l, keyboard.KeyCode(char="a")}],
+        ],
+        "command": lambda: print("KEK"),
+    }
+]).add_keymappings([{
     "key_sequences": [
         [{keyboard.Key.cmd, keyboard.KeyCode(char="c")}],
         [{keyboard.Key.cmd, keyboard.KeyCode(char="C")}],
     ],
     "command": lambda: run("Chrome"),
-})
-km.add_keymappings({
-    "key_sequences": [
-        [{keyboard.Key.cmd, keyboard.KeyCode(char="o")}],
-        [{keyboard.Key.cmd, keyboard.KeyCode(char="O")}],
-    ],
-    "command": lambda: run("Opera"),
-})
+    },
+    {
+        "key_sequences": [
+            [{keyboard.Key.cmd, keyboard.KeyCode(char="o")}],
+            [{keyboard.Key.cmd, keyboard.KeyCode(char="O")}],
+        ],
+        "command": lambda: run("Opera"),
+    }
+])
 
 
 def match_keymappings(key, keymappings, matched_sequences):
