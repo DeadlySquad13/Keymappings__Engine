@@ -31,7 +31,7 @@ def test_parse_keymapping_str_notation():
 
 @pytest.mark.parametrize('keymapping,decoded_keymapping', [
     ('ctrl_l', { keyboard.Key.ctrl_l }),
-    ('w', { keyboard.KeyCode(char='xw') }),
+    ('w', { keyboard.KeyCode(char='w') }),
 
     ('ctrl_l+w', { keyboard.Key.ctrl_l, keyboard.KeyCode(char='w') }),
     ('ctrl_l +w', { keyboard.Key.ctrl_l, keyboard.KeyCode(char='w') }),
