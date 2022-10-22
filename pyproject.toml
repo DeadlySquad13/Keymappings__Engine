@@ -2,11 +2,11 @@
 requires = ["setuptools>=42.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.pytest.ini_options]
-addopts = "--no-cov-on-fail --cov-branch --cov-report=term --cov-report=html --color=yes --code-highlight=yes --verbosity=2 --no-header"
-testpaths = [
-    "tests",
-]
+# [tool.pytest.ini_options]
+# addopts = "--no-cov-on-fail --cov-branch --cov-report=term --color=yes --code-highlight=yes --verbosity=2 --no-header"
+# testpaths = [
+#     "tests",
+# ]
 
 [tool.mypy]
 mypy_path = "src"
