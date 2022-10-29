@@ -1,5 +1,5 @@
 import re
-from typing import List
+from typing import List, Set
 from pynput import keyboard
 import subprocess
 
@@ -58,7 +58,12 @@ class Keymapping:
         return decoded_keymapping
 
 
-    def decode_keymapping_str_notation(self, keymapping: str) -> List[keyboard.Key | keyboard.KeyCode]:
+    def decode_keymapping_str_notation(self, keymapping: str) -> Set[keyboard.Key | keyboard.KeyCode]:
+        """Decode user defined string into more usable structure.
+
+        :param keymapping: user defined string.
+        :return: set of keys pressed (keyboard.Key or keyboard.KeyCode instances).
+        """
         parsed_keymapping = self.parse_keymapping_str_notation(keymapping)
 
         return { keyboard.Key[char] if char in keyboard.Key._member_names_ else
@@ -69,10 +74,14 @@ class Keymapping:
         if type(keymappings) == dict:
             keymappings = [keymappings]
 
-        standardized_keymappings = [k if type(k) != str else
-                                    self.decode_keymapping_str_notation(k) for k in keymappings]
+        for keymapping in keymappings:
+            key_sequences = keymapping['key_sequences']
+            for key_sequence in key_sequences:
+                keymapping['key_sequences'] = [[kc if type(kc) != str else
+                                                self.decode_keymapping_str_notation(kc) for kc in key_sequence]
+                                               for key_sequence in key_sequences]
 
-        self.KEYMAPPINGS += standardized_keymappings
+        self.KEYMAPPINGS += keymappings
 
         return self
 
@@ -84,28 +93,25 @@ km.add_keymappings([
         "key_sequences": [
             # [{keyboard.Key.ctrl_l, keyboard.KeyCode(char="w")}],
             ['ctrl_l + w'],
-            [{keyboard.Key.ctrl_l, keyboard.KeyCode(char="W")}],
+            # [{keyboard.Key.ctrl_l, keyboard.KeyCode(char="W")}],
         ],
         "command": lambda: print("TEST"),
     },
     {
         "key_sequences": [
-            [{keyboard.Key.ctrl_l, keyboard.KeyCode(char="w")},
-             {keyboard.Key.ctrl_l, keyboard.KeyCode(char="a")}],
+            ['ctrl_l + w', 'ctrl_l + a'],
         ],
         "command": lambda: print("KEK"),
     }
 ]).add_keymappings([{
         "key_sequences": [
-            [{keyboard.Key.cmd, keyboard.KeyCode(char="c")}],
-            [{keyboard.Key.cmd, keyboard.KeyCode(char="C")}],
+            ['cmd + c'],
         ],
         "command": lambda: run("Chrome"),
     },
     {
         "key_sequences": [
-            [{keyboard.Key.cmd, keyboard.KeyCode(char="o")}],
-            [{keyboard.Key.cmd, keyboard.KeyCode(char="O")}],
+            ['cmd + o'],
         ],
         "command": lambda: run("Opera"),
     }

@@ -1,4 +1,4 @@
-from typing import List
+from typing import Set
 from pynput import keyboard
 import pytest
 
@@ -38,6 +38,6 @@ def test_parse_keymapping_str_notation():
     ('ctrl_l+ w', { keyboard.Key.ctrl_l, keyboard.KeyCode(char='w') }),
     ('ctrl_l + w', { keyboard.Key.ctrl_l, keyboard.KeyCode(char='w') }),
 ])
-def test_decode_keymapping_str_notation(keymapping: str, decoded_keymapping: List[keyboard.Key | keyboard.KeyCode]):
+def test_decode_keymapping_str_notation(keymapping: str, decoded_keymapping: Set[keyboard.Key | keyboard.KeyCode]):
     km = Keymapping()
     assert km.decode_keymapping_str_notation(keymapping) == decoded_keymapping
