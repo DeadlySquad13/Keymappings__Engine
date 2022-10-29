@@ -21,6 +21,10 @@ def with_decoration(func):
 
     return wrapper
 
+def wrap_into_list_if_not_already(item) -> List:
+    return item if type(item) == list else [item]
+
+
 @with_decoration
 @debug_arguments
 def run(s: str) -> None:
@@ -69,17 +73,25 @@ class Keymapping:
         return { keyboard.Key[char] if char in keyboard.Key._member_names_ else
                 keyboard.KeyCode(char=char) for char in parsed_keymapping }
 
-
     def add_keymappings(self, keymappings: list | dict):
-        if type(keymappings) == dict:
+        """Standardize structure and decode, then add to the keymappings list.
+
+        :param keymappings: 
+        :return: self
+        :rtype: Keymapping
+        """
+        # Standardize structure: we can get either one keymapping or multiple keymappings.
+        if type(keymappings) != list:
             keymappings = [keymappings]
 
+        # Decode string notation and standardize structure: key_sequence can be either a
+        #   single key chord or a list of key chords.
         for keymapping in keymappings:
-            key_sequences = keymapping['key_sequences']
-            for key_sequence in key_sequences:
-                keymapping['key_sequences'] = [[kc if type(kc) != str else
-                                                self.decode_keymapping_str_notation(kc) for kc in key_sequence]
-                                               for key_sequence in key_sequences]
+            keymapping['key_sequences'] = [[kc if type(kc) != str else
+                                            self.decode_keymapping_str_notation(kc)
+                                            for kc in
+                                             wrap_into_list_if_not_already(key_sequence)] for
+                                            key_sequence in keymapping['key_sequences']]
 
         self.KEYMAPPINGS += keymappings
 
@@ -92,7 +104,7 @@ km.add_keymappings([
     {
         "key_sequences": [
             # [{keyboard.Key.ctrl_l, keyboard.KeyCode(char="w")}],
-            ['ctrl_l + w'],
+            'ctrl_l + w',
             # [{keyboard.Key.ctrl_l, keyboard.KeyCode(char="W")}],
         ],
         "command": lambda: print("TEST"),
@@ -105,13 +117,13 @@ km.add_keymappings([
     }
 ]).add_keymappings([{
         "key_sequences": [
-            ['cmd + c'],
+            'cmd + c',
         ],
         "command": lambda: run("Chrome"),
     },
     {
         "key_sequences": [
-            ['cmd + o'],
+            'cmd + o',
         ],
         "command": lambda: run("Opera"),
     }
