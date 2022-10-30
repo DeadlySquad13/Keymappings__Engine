@@ -223,7 +223,7 @@ def main():
 
     def on_press(key):
         for c in match_keymappings(key, km.KEYMAPPINGS, matched_sequences):
-            command = c["command"]
+            command = c['command']
 
             if command == 'TERMINATE':
                 return False
