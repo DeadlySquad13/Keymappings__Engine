@@ -2,8 +2,11 @@ import re
 from typing import List, Set
 from pynput import keyboard
 import subprocess
+import psutil
 
 from keymappings.converters import convert_to_readable_key
+
+ENV = 'debug'
 
 def debug_arguments(func):
     def wrapper(*args, **kwargs):
@@ -11,6 +14,10 @@ def debug_arguments(func):
         func(*args, **kwargs)
 
     return wrapper
+
+def debug_print(*args, **kwargs):
+    if ENV == 'debug':
+        print(*args, **kwargs)
 
 
 def with_decoration(func):
@@ -27,17 +34,36 @@ def wrap_into_list_if_not_already(item) -> List:
 
 @with_decoration
 @debug_arguments
-def run(s: str) -> None:
-    # subprocess.Popen(s)
-    subprocess.call(s, shell=True)
+def run(shell_process: str) -> None:
+    subprocess.call(shell_process, shell=True)
+
+@with_decoration
+@debug_arguments
+def run_if_process_does_not_exist(shell_command: str, process: str) -> None:
+    """
+    Example:
+        run_if_process_does_not_exist('Chrome', 'chrome.exe')
+        run_if_process_does_not_exist('Chrome') # Will search for `Chrome.exe` and `chrome.exe`.
+
+    :param shell_command: what to run.
+    :param process: for which process to check.
+    """
+    running_processes = (p.name() for p in psutil.process_iter())
+
+    if any(process_to_be_created in running_processes for process_to_be_created in
+           [process, shell_command + '.exe', shell_command.upper() + '.exe']):
+        debug_print(f'{shell_command} is already running')
+        return
+
+    run(shell_command)
 
 class Keymapping:
     def __init__(self) -> None:
         self.KEYMAPPINGS = [{
-            "key_sequences": [
+            'key_sequences': [
                 [{keyboard.Key.ctrl_l, keyboard.Key.alt_l, keyboard.Key.f4}],
             ],
-            "command": "TERMINATE",
+            'command': 'TERMINATE',
         }]
 
 
@@ -84,7 +110,7 @@ class Keymapping:
         if type(keymappings) != list:
             keymappings = [keymappings]
 
-        # Decode string notation and standardize structure: key_sequence can be either a
+        # Decode string notation and standardizing structure: key_sequence can be either a
         #   single key chord or a list of key chords.
         for keymapping in keymappings:
             keymapping['key_sequences'] = [[kc if type(kc) != str else
@@ -99,35 +125,56 @@ class Keymapping:
 
 
 pressed = []
+
+START_MENU_PROGRAMS = 'C:\\Users\\ds13\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\'
 km = Keymapping()
 km.add_keymappings([
     {
-        "key_sequences": [
-            # [{keyboard.Key.ctrl_l, keyboard.KeyCode(char="w")}],
+        'key_sequences': [
             'ctrl_l + w',
-            # [{keyboard.Key.ctrl_l, keyboard.KeyCode(char="W")}],
         ],
-        "command": lambda: print("TEST"),
+        'command': lambda: print('TEST'),
     },
     {
-        "key_sequences": [
+        'key_sequences': [
             ['ctrl_l + w', 'ctrl_l + a'],
         ],
-        "command": lambda: print("KEK"),
+        'command': lambda: print('KEK'),
     }
 ]).add_keymappings([{
-        "key_sequences": [
+        'key_sequences': [
             'cmd + c',
         ],
-        "command": lambda: run("Chrome"),
+        'command': lambda: run_if_process_does_not_exist('Chrome', 'chrome.exe'),
     },
     {
-        "key_sequences": [
+        'key_sequences': [
             'cmd + o',
         ],
-        "command": lambda: run("Opera"),
+        'command': lambda: run('Opera'),
     }
+]).add_keymappings([{
+        'key_sequences': [
+            ['cmd + m', 'd'],
+        ],
+        'command': lambda:
+        run_if_process_does_not_exist(f'{START_MENU_PROGRAMS}\\Discord Inc\\Discord', 'Discord.exe'),
+    },
+    {
+        'key_sequences': [
+            ['cmd + m', 't'],
+        ],
+        'command': lambda:
+        run_if_process_does_not_exist(f'{START_MENU_PROGRAMS}\\Telegram Desktop\\Telegram', 'Telegram.exe'),
+    },
+    {
+        'key_sequences': [
+            ['cmd + m', 'o'],
+        ],
+        'command': lambda: print('Telegram!'),
+    },
 ])
+
 
 
 def match_keymappings(key, keymappings, matched_sequences):
@@ -145,7 +192,7 @@ def match_keymappings(key, keymappings, matched_sequences):
     print(pressed)
 
     for keymappings_index, keymapping in enumerate(keymappings):
-        for key_sequences in keymapping["key_sequences"]:
+        for key_sequences in keymapping['key_sequences']:
             chord = key_sequences[matched_sequences[keymappings_index]]
 
             # if chord.issubset(pressed):
@@ -162,7 +209,7 @@ def match_keymappings(key, keymappings, matched_sequences):
             else:
                 matched_sequences[keymappings_index] = 0
 
-    print("Result", matched_keymappings)
+    print('Result', matched_keymappings)
     return matched_keymappings
 
 def main():
