@@ -1,10 +1,13 @@
+import os
 import re
-from typing import List, Set
+from typing import List, Set, Tuple
+from dataclasses import dataclass
 from pynput import keyboard
+import keyboard as k
 import subprocess
 import psutil
 
-from keymappings.converters import convert_to_readable_key
+# from keymappings.converters import convert_to_readable_key
 
 ENV = 'debug'
 
@@ -61,7 +64,7 @@ class Keymapping:
     def __init__(self) -> None:
         self.KEYMAPPINGS = [{
             'key_sequences': [
-                [{keyboard.Key.ctrl_l, keyboard.Key.alt_l, keyboard.Key.f4}],
+                [{keyboard.Key.ctrl, keyboard.Key.alt_l, keyboard.Key.f4}],
             ],
             'command': 'TERMINATE',
         }]
@@ -74,10 +77,10 @@ class Keymapping:
 
         `if type(keymmapings) == dict: keymapping = 'kek'`
         :param keymapping: user defined keymapping
-            e.g.: 'c', 'a+w', 'ctrl_l + w'
+            e.g.: 'c', 'a+w', 'ctrl+w'
         :type keymapping: str 
         :return: structure of parsed chars
-            e.g.: ['c'], [{'a', 'w'}], [{ 'ctrl_l', 'w' }]
+            e.g.: ['c'], [{'a', 'w'}], [{ 'ctrl', 'w' }]
         :rtype: List[set]
         """
 
@@ -99,7 +102,7 @@ class Keymapping:
         return { keyboard.Key[char] if char in keyboard.Key._member_names_ else
                 keyboard.KeyCode(char=char) for char in parsed_keymapping }
 
-    def add_keymappings(self, keymappings: list | dict):
+    def _add_keymappings(self, keymappings: list | dict):
         """Standardize structure and decode, then add to the keymappings list.
 
         :param keymappings: 
@@ -123,123 +126,260 @@ class Keymapping:
 
         return self
 
+    def add_keymappings(self, keymappings: list | dict):
+        return self
+        keymappings = wrap_into_list_if_not_already(keymappings)
 
-pressed = []
+        for keymapping in keymappings:
+            for key_sequence in keymapping['key_sequences']:
+                if type(key_sequence) == list:
+                    debug_print('Adding sequence of chords')
+                else:
+                    k.add_hotkey(key_sequence, keymapping['command'],
+                                 suppress=True, trigger_on_release=True)
+
+        return self
+
+
+pressed = set()
 
 START_MENU_PROGRAMS = 'C:\\Users\\ds13\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\'
 km = Keymapping()
 km.add_keymappings([
     {
         'key_sequences': [
-            'ctrl_l + w',
+            'ctrl+w',
         ],
         'command': lambda: print('TEST'),
     },
     {
         'key_sequences': [
-            ['ctrl_l + w', 'ctrl_l + a'],
+            ['ctrl+w', 'ctrl+a'],
         ],
         'command': lambda: print('KEK'),
     }
 ]).add_keymappings([{
         'key_sequences': [
-            'cmd + c',
+            'cmd+c',
         ],
         'command': lambda: run_if_process_does_not_exist('Chrome', 'chrome.exe'),
     },
     {
         'key_sequences': [
-            'cmd + o',
+            'cmd+o',
         ],
         'command': lambda: run('Opera'),
     }
 ]).add_keymappings([{
         'key_sequences': [
-            ['cmd + m', 'd'],
+            ['cmd+m', 'd'],
         ],
         'command': lambda:
         run_if_process_does_not_exist(f'{START_MENU_PROGRAMS}\\Discord Inc\\Discord', 'Discord.exe'),
     },
     {
         'key_sequences': [
-            ['cmd + m', 't'],
+            ['cmd+m', 't'],
         ],
         'command': lambda:
         run_if_process_does_not_exist(f'{START_MENU_PROGRAMS}\\Telegram Desktop\\Telegram', 'Telegram.exe'),
     },
     {
         'key_sequences': [
-            ['cmd + m', 'o'],
+            ['cmd+m', 'o'],
         ],
         'command': lambda: print('Telegram!'),
     },
 ])
 
+@dataclass
+class Action:
+    command: str
+
+    def exec(self):
+        if self.command == 'TERMINATE':
+            return os._exit(0)
+
+        self.command()
+
+# At the moment of parsing.
+KEYMAPPINGS_TREE = {
+    'ctrl+w': {
+        'action': Action(command=lambda: print('TEST')),
+
+        'ctrl+a': {
+            'action': Action(command=lambda: print('KEK')),
+        },
+    },
+    'cmd+c': {
+        'action': Action(command=lambda: run_if_process_does_not_exist('Chrome', 'chrome.exe')),
+    },
+    'cmd+o': {
+        'action': Action(command=lambda: run('Opera')),
+    },
+    'cmd+m': {
+        'd': {
+            'action': Action(command=lambda:
+                run_if_process_does_not_exist(f'{START_MENU_PROGRAMS}\\Discord Inc\\Discord', 'Discord.exe')
+             ),
+        },
+        't': {
+            'action': Action(command=lambda:
+                run_if_process_does_not_exist(f'{START_MENU_PROGRAMS}\\Telegram Desktop\\Telegram', 'Telegram.exe')
+             ),
+        },
+        'o': {
+            'action': Action(command=lambda: print('Telegram!')),
+        }
+    },
+}
 
 
-def match_keymappings(key, keymappings, matched_sequences):
-    matched_keymappings = []
+def P(args):
+    print(args)
 
-    print('key', key)
-    try:
-        print('key_vk', key.vk)
-    except:
-        pass
+    return args
 
-    if (not convert_to_readable_key(key) in pressed):
-        pressed.append(convert_to_readable_key(key))
+@dataclass
+class Key:
+    name: str
+    scan_codes: Tuple[int]
 
-    print(pressed)
+    @classmethod
+    def from_keyboard_event(self, event: k.KeyboardEvent):
+        return self(event.name, (event.scan_code,))
 
-    for keymappings_index, keymapping in enumerate(keymappings):
-        for key_sequences in keymapping['key_sequences']:
-            chord = key_sequences[matched_sequences[keymappings_index]]
+    def __eq__(self, other: object) -> bool:
+        """At least one scan code should match. When we type we get one
+        scan_code, when we parsed_keymapping - tuple of all possible.
+        """
+        # return any(scan_code in other.scan_codes for scan_code in self.scan_codes)
+        return any(scan_code in other.scan_codes for scan_code in self.scan_codes)
 
-            # if chord.issubset(pressed):
-            if all(key in pressed for key in chord):
-                matched_sequences[keymappings_index] += 1
+@dataclass
+class KeySequence:
+    sequence: List[Key]
 
-                # Sequences has ended.
-                if matched_sequences[keymappings_index] == len(key_sequences):
-                    matched_sequences[keymappings_index] = 0
-                    matched_keymappings.append(keymapping)
-                    matched_sequences[keymappings_index] = 0
+# [index: chord_index]
+# Example:
+#   [
+#       0: 1, # On first keymapping (e.g., [Ctrl+Alt+A, Ctrl-B]) first chord (Ctrl+Alt+A) was matched.
+#       1: 0, # Second keymapping wasn't matched yet.
+#   ]
+# matched_sequences = [0 for _ in km.KEYMAPPINGS]
 
-            # Sequence was interrupted.
-            else:
-                matched_sequences[keymappings_index] = 0
+def match_keymappings(key, keymappings: dict):
+    matched=[]
 
-    print('Result', matched_keymappings)
+    if (not key in pressed):
+        pressed.add(key)
+
+    print('pressed', pressed)
+
+    for current in keymappings.keys():
+        # sequence = k.parse_hotkey('ctrl+w,a')
+        chord = k.parse_hotkey(current)[0] # It parses it as combination so we take first element as we always give it a chord.
+        print('chord', chord)
+
+        if all(any(key in possible_scan_codes for key in pressed) for
+               possible_scan_codes in chord):
+            matched.append(current)
+            print('CHORD!', chord)
+
+        # chord_keys = (Key('', possible_scan_codes) for possible_scan_codes in chord)
+        # pressed_keys = (Key('', (scan_code,)) for scan_code in pressed)
+        # print(list(pressed_keys), list(chord_keys))
+
+    # if all(key in pressed_keys for key in chord_keys):
+    #     print('!!!!!CHORD!!!!!!!')
+
+    matched_keymappings = {match: keymappings[match] for match in matched}
+
     return matched_keymappings
 
+
+last_matched_keymappings = KEYMAPPINGS_TREE
+
+def on_match_keymappings(matched_keymappings):
+    global last_matched_keymappings
+
+    # No keymappings left, resetting.
+    if not matched_keymappings:
+        last_matched_keymappings = KEYMAPPINGS_TREE
+        return
+
+    last_matched_keymappings = matched_keymappings
+
+    for keymapping in matched_keymappings.values():
+        print('keymapping', keymapping)
+        action = keymapping.get('action')
+
+        if not action:
+            debug_print('No action found!')
+            continue
+
+        action.exec()
+
+
+def on_press_hook(event: k.KeyboardEvent):
+    print('--------------------------------------')
+    # for c in match_keymappings(event.scan_code, km.KEYMAPPINGS, matched_sequences):
+    matched_keymappings = match_keymappings(event.scan_code, last_matched_keymappings)
+
+    on_match_keymappings(matched_keymappings)
+
+    print(event.name)
+
+    key = event.scan_code
+
+    # Hack for not registered windows key
+    #   [mr](https://github.com/boppreh/keyboard/pull/463/files).
+    if key == 91:
+        return k.press('left windows')
+
+    k.press(key)
+
+def on_release_hook(event: k.KeyboardEvent):
+    key = event.scan_code
+    if key in pressed:
+        pressed.remove(key)
+
+    # Hack for not registered windows key
+    #   [mr](https://github.com/boppreh/keyboard/pull/463/files).
+    if key == 91:
+        return k.release('left windows')
+
+    k.release(key)
+
+def on_event(event: k.KeyboardEvent):
+    if event.name == '[':
+        return os._exit(0)
+
+    if event.event_type == 'down':
+        on_press_hook(event)
+    else:
+        on_release_hook(event)
+
+
 def main():
-    # [index: chord_index]
-    # Example:
-    #   [
-    #       0: 1, # On first keymapping (e.g., [Ctrl+Alt+A, Ctrl-B]) first chord (Ctrl+Alt+A) was matched.
-    #       1: 0, # Second keymapping wasn't matched yet.
-    #   ]
-    matched_sequences = [0 for _ in km.KEYMAPPINGS]
-
-    def on_press(key):
-        for c in match_keymappings(key, km.KEYMAPPINGS, matched_sequences):
-            command = c['command']
-
-            if command == 'TERMINATE':
-                return False
-
-            command()
+    k.hook(on_event, suppress=True)
 
 
-    def on_release(key):
-        my_key = convert_to_readable_key(key) 
+    k.wait()
 
-        if my_key in pressed:
-            pressed.remove(my_key)
+    # def on_press(key):
+    #     for c in match_keymappings(key, km.KEYMAPPINGS, matched_sequences):
+    #         command = c['command']
 
-    # Collect events until released.
-    with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-        listener.join()
+    #         if command == 'TERMINATE':
+    #             return False
+
+    #         command()
+
+
+    # # Collect events until released.
+    # with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+    #     listener.join()
 
 
 if __name__ == '__main__':
