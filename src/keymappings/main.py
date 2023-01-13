@@ -3,6 +3,7 @@ import re
 from typing import List, Set, Tuple
 from dataclasses import dataclass
 from pynput import keyboard
+from functools import reduce
 import keyboard as k
 import subprocess
 import psutil
@@ -141,8 +142,6 @@ class Keymapping:
         return self
 
 
-pressed = set()
-
 START_MENU_PROGRAMS = 'C:\\Users\\ds13\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\'
 km = Keymapping()
 km.add_keymappings([
@@ -211,6 +210,9 @@ KEYMAPPINGS_TREE = {
             'action': Action(command=lambda: print('KEK')),
         },
     },
+    'o': {
+        'action': Action(command=lambda: print('OOO')),
+    },
     'cmd+c': {
         'action': Action(command=lambda: run_if_process_does_not_exist('Chrome', 'chrome.exe')),
     },
@@ -233,7 +235,6 @@ KEYMAPPINGS_TREE = {
         }
     },
 }
-
 
 def P(args):
     print(args)
@@ -268,101 +269,126 @@ class KeySequence:
 #   ]
 # matched_sequences = [0 for _ in km.KEYMAPPINGS]
 
-def match_keymappings(key, keymappings: dict):
-    matched=[]
+@dataclass
+class KeymappingsLoop:
+    children_keymappings = KEYMAPPINGS_TREE
+    pressed = set()
 
-    if (not key in pressed):
-        pressed.add(key)
+    def key_is_held(self):
+        return len(self.pressed) > 1
 
-    print('pressed', pressed)
+    def is_key_or_combination(self, value):
+        # Make regex?
+        return not (value == 'action' or value == 'description')
 
-    for current in keymappings.keys():
-        # sequence = k.parse_hotkey('ctrl+w,a')
-        chord = k.parse_hotkey(current)[0] # It parses it as combination so we take first element as we always give it a chord.
-        print('chord', chord)
+    def match_keymappings(self, key, keymappings: dict):
+        print(keymappings)
+        matched_keymappings = {}
 
-        if all(any(key in possible_scan_codes for key in pressed) for
-               possible_scan_codes in chord):
-            matched.append(current)
-            print('CHORD!', chord)
+        if (not key in self.pressed):
+            self.pressed.add(key)
 
-        # chord_keys = (Key('', possible_scan_codes) for possible_scan_codes in chord)
-        # pressed_keys = (Key('', (scan_code,)) for scan_code in pressed)
-        # print(list(pressed_keys), list(chord_keys))
+        print('pressed', self.pressed)
 
-    # if all(key in pressed_keys for key in chord_keys):
-    #     print('!!!!!CHORD!!!!!!!')
+        for current, children in keymappings.items():
+            # sequence = k.parse_hotkey('ctrl+w,a')
+            if not self.is_key_or_combination(current):
+                continue
+            chord = k.parse_hotkey(current)[0] # It parses it as combination so we take first element as we always give it a chord.
+            print('chord', chord)
 
-    matched_keymappings = {match: keymappings[match] for match in matched}
+            if all(any(key in possible_scan_codes for key in self.pressed) for
+                   possible_scan_codes in chord):
+                matched_keymappings[current] = children
+                print('^This chord was matched!')
 
-    return matched_keymappings
+            # chord_keys = (Key('', possible_scan_codes) for possible_scan_codes in chord)
+            # pressed_keys = (Key('', (scan_code,)) for scan_code in pressed)
+            # print(list(pressed_keys), list(chord_keys))
 
+        # matched_keymappings: dict = reduce(lambda accumulator, match: accumulator | keymappings[match], matched, {})
 
-last_matched_keymappings = KEYMAPPINGS_TREE
-
-def on_match_keymappings(matched_keymappings):
-    global last_matched_keymappings
-
-    # No keymappings left, resetting.
-    if not matched_keymappings:
-        last_matched_keymappings = KEYMAPPINGS_TREE
-        return
-
-    last_matched_keymappings = matched_keymappings
-
-    for keymapping in matched_keymappings.values():
-        print('keymapping', keymapping)
-        action = keymapping.get('action')
-
-        if not action:
-            debug_print('No action found!')
-            continue
-
-        action.exec()
+        return matched_keymappings # A subset of a keymappings.
 
 
-def on_press_hook(event: k.KeyboardEvent):
-    print('--------------------------------------')
-    # for c in match_keymappings(event.scan_code, km.KEYMAPPINGS, matched_sequences):
-    matched_keymappings = match_keymappings(event.scan_code, last_matched_keymappings)
+    def on_match_keymappings(self, matched_keymappings):
+        # No keymappings found
+        if not matched_keymappings:
+            #   Some key is held, wait until it's released. Maybe next key will
+            # complete the chord
+            if self.key_is_held():
+                return
 
-    on_match_keymappings(matched_keymappings)
+            # No keys are held, we are no longer expecting chord parts.
+            self.children_keymappings = KEYMAPPINGS_TREE
+            return
 
-    print(event.name)
+        matched = filter(self.is_key_or_combination, matched_keymappings.keys())
+        # print('matched', list(matched))
+        print('children', self.children_keymappings)
+        # self.children_keymappings: dict = reduce(lambda accumulator, match: accumulator | P(self.children_keymappings[match]), matched, {}) # or KEYMAPPINGS_TREE
 
-    key = event.scan_code
+        self.children_keymappings: dict = reduce(lambda accumulator, match: accumulator | self.children_keymappings[match], matched, {}) or KEYMAPPINGS_TREE
+        print('children', self.children_keymappings)
 
-    # Hack for not registered windows key
-    #   [mr](https://github.com/boppreh/keyboard/pull/463/files).
-    if key == 91:
-        return k.press('left windows')
+        for keymapping in matched_keymappings.values():
+            print('keymapping', keymapping)
+            action = keymapping.get('action')
 
-    k.press(key)
+            if not action:
+                debug_print('No action found!')
+                continue
 
-def on_release_hook(event: k.KeyboardEvent):
-    key = event.scan_code
-    if key in pressed:
-        pressed.remove(key)
+            action.exec()
 
-    # Hack for not registered windows key
-    #   [mr](https://github.com/boppreh/keyboard/pull/463/files).
-    if key == 91:
-        return k.release('left windows')
 
-    k.release(key)
+    def on_press_hook(self, event: k.KeyboardEvent):
+        print('--------------------------------------')
+        print('pressed:', event.name)
+        matched_keymappings = self.match_keymappings(event.scan_code, self.children_keymappings)
 
-def on_event(event: k.KeyboardEvent):
-    if event.name == '[':
-        return os._exit(0)
+        # No keymappings found
+        if not matched_keymappings and not self.key_is_held():
+            self.children_keymappings = KEYMAPPINGS_TREE
+            # No keys are held, we are no longer expecting chord parts.
+            matched_keymappings = self.match_keymappings(event.scan_code, self.children_keymappings)
 
-    if event.event_type == 'down':
-        on_press_hook(event)
-    else:
-        on_release_hook(event)
+        self.on_match_keymappings(matched_keymappings)
+
+        key = event.scan_code
+
+        # Hack for not registered windows key
+        #   [mr](https://github.com/boppreh/keyboard/pull/463/files).
+        if key == 91:
+            return k.press('left windows')
+
+        k.press(key)
+
+    def on_release_hook(self, event: k.KeyboardEvent):
+        key = event.scan_code
+        if key in self.pressed:
+            self.pressed.remove(key)
+
+        # Hack for not registered windows key
+        #   [mr](https://github.com/boppreh/keyboard/pull/463/files).
+        if key == 91:
+            return k.release('left windows')
+
+        k.release(key)
+
+    def on_event(self, event: k.KeyboardEvent):
+        if event.name == '[':
+            return os._exit(0)
+
+        if event.event_type == 'down':
+            self.on_press_hook(event)
+        else:
+            self.on_release_hook(event)
 
 
 def main():
-    k.hook(on_event, suppress=True)
+    loop = KeymappingsLoop()
+    k.hook(loop.on_event, suppress=True)
 
 
     k.wait()
