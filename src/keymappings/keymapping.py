@@ -4,8 +4,6 @@ import re
 from typing import List, Set
 from pynput import keyboard
 
-from keymappings.user_layer import run_if_process_does_not_exist, run
-
 def wrap_into_list_if_not_already(item) -> List:
     return item if type(item) == list else [item]
 
@@ -21,48 +19,12 @@ class Action:
 
 
 class Keymapping:
-    # At the moment of parsing.
-    KEYMAPPINGS_TREE = {
-        'ctrl+w': {
-            'action': Action(command=lambda: print('TEST')),
-
-            'ctrl+a': {
-                'action': Action(command=lambda: print('KEK')),
-            },
-        },
-        'o': {
-            'action': Action(command=lambda: print('OOO')),
-        },
-        'cmd+c': {
-            'action': Action(command=lambda: run_if_process_does_not_exist('Chrome', 'chrome.exe')),
-        },
-        'cmd+o': {
-            'action': Action(command=lambda: run('Opera')),
-        },
-        'cmd+m': {
-            'd': {
-                'action': Action(command=lambda:
-                    run_if_process_does_not_exist(f'{START_MENU_PROGRAMS}\\Discord Inc\\Discord', 'Discord.exe')
-                 ),
-            },
-            't': {
-                'action': Action(command=lambda:
-                    run_if_process_does_not_exist(f'{START_MENU_PROGRAMS}\\Telegram Desktop\\Telegram', 'Telegram.exe')
-                 ),
-            },
-            'o': {
-                'action': Action(command=lambda: print('Telegram!')),
-            }
-        },
-    }
-
     def __init__(self) -> None:
-        self.KEYMAPPINGS = [{
-            'key_sequences': [
-                [{keyboard.Key.ctrl, keyboard.Key.alt_l, keyboard.Key.f4}],
-            ],
-            'command': 'TERMINATE',
-        }]
+        self.KEYMAPPINGS = {
+            'ctrl+alt+f4': {
+                'action': Action(command='TERMINATE'),
+            }
+        }
 
 
     SPECIAL_CHARS = [' ', '+']
@@ -134,53 +96,3 @@ class Keymapping:
                                  suppress=True, trigger_on_release=True)
 
         return self
-
-
-START_MENU_PROGRAMS = 'C:\\Users\\ds13\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\'
-km = Keymapping()
-km.add_keymappings([
-    {
-        'key_sequences': [
-            'ctrl+w',
-        ],
-        'command': lambda: print('TEST'),
-    },
-    {
-        'key_sequences': [
-            ['ctrl+w', 'ctrl+a'],
-        ],
-        'command': lambda: print('KEK'),
-    }
-]).add_keymappings([{
-        'key_sequences': [
-            'cmd+c',
-        ],
-        'command': lambda: run_if_process_does_not_exist('Chrome', 'chrome.exe'),
-    },
-    {
-        'key_sequences': [
-            'cmd+o',
-        ],
-        'command': lambda: run('Opera'),
-    }
-]).add_keymappings([{
-        'key_sequences': [
-            ['cmd+m', 'd'],
-        ],
-        'command': lambda:
-        run_if_process_does_not_exist(f'{START_MENU_PROGRAMS}\\Discord Inc\\Discord', 'Discord.exe'),
-    },
-    {
-        'key_sequences': [
-            ['cmd+m', 't'],
-        ],
-        'command': lambda:
-        run_if_process_does_not_exist(f'{START_MENU_PROGRAMS}\\Telegram Desktop\\Telegram', 'Telegram.exe'),
-    },
-    {
-        'key_sequences': [
-            ['cmd+m', 'o'],
-        ],
-        'command': lambda: print('Telegram!'),
-    },
-])
