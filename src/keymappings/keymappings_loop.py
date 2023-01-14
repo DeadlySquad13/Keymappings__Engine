@@ -36,12 +36,35 @@ class Key:
     def __key__(self):
         return self.scan_codes
 
+    # For storing in set.
     def __hash__(self):
         return hash(self.__key__())
 
     @classmethod
     def from_keyboard_event(self, event: k.KeyboardEvent):
         return self(event.name, (event.scan_code,))
+
+@dataclass
+class Chord:
+    keys: Set[Key]
+
+    def __eq__(self, other: Self):
+        return all( # All keys in chords should match.
+                   any(key == left_key for key in other.keys)
+                       for left_key in self.keys
+                  )
+
+    @classmethod
+    def from_keyboard_chord(self, chord: str):
+        keys = k.parse_hotkey(chord)[0] # It parses it as combination so we take first element as we always give it a chord.
+        keys_translated = set(map(lambda scan_codes: Key('', scan_codes=scan_codes), keys))
+
+        return self(keys=keys_translated)
+
+
+def is_key_or_combination(value):
+    # Make regex to check if it's a key instead of checking fields?
+    return not (value == 'action' or value == 'description')
 
 
 @dataclass
@@ -54,24 +77,10 @@ class KeymappingsLoop:
     def __post_init__(self):
         self.children_keymappings = self.initial_parsed_keymappings
 
-    def key_is_held(self):
+    def _key_is_held(self):
         return len(self.pressed) > 1
 
-    def is_key_or_combination(self, value):
-        # Make regex to check if it's a key instead of checking fields?
-        return not (value == 'action' or value == 'description')
-
-    def chords_are_equal(self, left: List[Key], right: Set[Key]):
-        # return all( # All keys in chords should match.
-        #            any(key in left_key.scan_codes for key in right) # But there're multiple variants of the key representation. Match with any of them.
-        #                for left_key in left
-        #           )
-        return all( # All keys in chords should match.
-                   any(key == left_key for key in right)
-                       for left_key in left
-                  )
-
-    def match_keymappings(self, key: Key, keymappings: dict) -> dict:
+    def _match_keymappings(self, key: Key, keymappings: dict) -> dict:
         """
 
         :param key: 
@@ -88,14 +97,11 @@ class KeymappingsLoop:
 
         for current, children in keymappings.items():
             # sequence = k.parse_hotkey('ctrl+w,a')
-            if not self.is_key_or_combination(current):
+            if not is_key_or_combination(current):
                 continue
 
-            current_chord = k.parse_hotkey(current)[0] # It parses it as combination so we take first element as we always give it a chord.
-            # debug_print('chord', current_chord)
-            current_chord = list(map(lambda scan_codes: Key('', scan_codes=scan_codes), current_chord))
-
-            if self.chords_are_equal(current_chord, self.pressed):
+            current_chord = Chord.from_keyboard_chord(current)
+            if current_chord == Chord(self.pressed):
                 matched_keymappings[current] = children
                 # print('^This chord was matched!')
 
@@ -106,29 +112,17 @@ class KeymappingsLoop:
         return matched_keymappings
 
 
-    def on_match_keymappings(self, matched_keymappings):
+    def _on_match_keymappings(self, matched_keymappings):
         # No keymappings found.
         if not matched_keymappings:
             #   Some key is held, wait until it's released. Maybe next key will
             # complete the chord.
-            if self.key_is_held():
+            if self._key_is_held():
                 return False
 
             # No keys are held, we are no longer expecting chord parts.
             self.children_keymappings = self.initial_parsed_keymappings
             return False
-
-        matched = filter(self.is_key_or_combination, matched_keymappings.keys())
-        # print('matched', list(matched))
-        # debug_print('children', self.children_keymappings)
-
-        self.children_keymappings: dict = reduce(
-                lambda accumulator, match: accumulator | self.children_keymappings[match],
-                matched,
-                {}
-            ) or self.initial_parsed_keymappings
-
-        # debug_print('children', self.children_keymappings)
 
         for keymapping in matched_keymappings.values():
             print('keymapping', keymapping)
@@ -140,6 +134,18 @@ class KeymappingsLoop:
 
             action.exec()
 
+        matched = filter(is_key_or_combination, matched_keymappings.keys())
+        # print('matched', list(matched))
+        # debug_print('children', self.children_keymappings)
+
+        # debug_print('children', self.children_keymappings)
+
+        self.children_keymappings: dict = reduce(
+                lambda accumulator, match: accumulator | self.children_keymappings[match],
+                matched,
+                {}
+            ) or self.initial_parsed_keymappings
+
         return True
 
     current_sequence = []
@@ -149,19 +155,19 @@ class KeymappingsLoop:
         debug_print('pressed:', event.name)
         key = Key.from_keyboard_event(event)
         self.current_sequence.append(key)
-        matched_keymappings = self.match_keymappings(key, self.children_keymappings)
+        matched_keymappings = self._match_keymappings(key, self.children_keymappings)
 
         #   No children combinations found, no keys are held, we are no longer
         # expecting chord parts.
         #   Maybe user started typing new sequence. Try again but on root level
         # if we are not already on root level.
-        if not matched_keymappings and not self.key_is_held() and len(self.current_sequence) > 1:
+        if not matched_keymappings and not self._key_is_held() and len(self.current_sequence) > 1:
             self.children_keymappings = self.initial_parsed_keymappings
             
-            matched_keymappings = self.match_keymappings(key, self.children_keymappings)
+            matched_keymappings = self._match_keymappings(key, self.children_keymappings)
 
         # No keymappings found.
-        if not self.on_match_keymappings(matched_keymappings):
+        if not self._on_match_keymappings(matched_keymappings):
             print('sequence:',self.current_sequence)
             # Send all accumulated keys.
             for key in self.current_sequence:
