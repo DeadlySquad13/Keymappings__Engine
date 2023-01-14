@@ -36,7 +36,7 @@ class KeymappingsLoop:
         return len(self.pressed) > 1
 
     def is_key_or_combination(self, value):
-        # Make regex?
+        # Make regex to check if it's a key instead of checking fields?
         return not (value == 'action' or value == 'description')
 
     def match_keymappings(self, key, keymappings: dict):
@@ -134,9 +134,6 @@ class KeymappingsLoop:
         k.release(key)
 
     def on_event(self, event: k.KeyboardEvent):
-        if event.name == '[':
-            return os._exit(0)
-
         if event.event_type == 'down':
             self.on_press_hook(event)
         else:
