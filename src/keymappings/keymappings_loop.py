@@ -1,6 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import reduce
+from typing import List, Set
 import keyboard as k
+import copy
 
 from keymappings.debug import debug_print
 from keymappings.key import Key
@@ -15,16 +17,16 @@ def is_key_or_combination(value):
 class KeymappingsLoop:
     initial_parsed_keymappings: dict
 
-    children_keymappings = {}
-    pressed = set()
+    children_keymappings: dict = field(default_factory=dict)
+    pressed: Set[Key] = field(default_factory=set)
 
     def __post_init__(self):
         self.children_keymappings = self.initial_parsed_keymappings
 
-    def _key_is_held(self):
+    def _keys_are_held(self):
         return len(self.pressed) > 1
 
-    def _match_keymappings(self, key: Key, keymappings: dict) -> dict:
+    def _match_keymappings(self, keymappings: dict) -> dict:
         """
 
         :param key: 
@@ -33,11 +35,6 @@ class KeymappingsLoop:
         """
         print(keymappings)
         matched_keymappings = {}
-
-        if not key in self.pressed:
-            self.pressed.add(key)
-
-        print('pressed', self.pressed)
 
         for current, children in keymappings.items():
             # sequence = k.parse_hotkey('ctrl+w,a')
@@ -61,22 +58,12 @@ class KeymappingsLoop:
         if not matched_keymappings:
             #   Some key is held, wait until it's released. Maybe next key will
             # complete the chord.
-            if self._key_is_held():
+            if self._keys_are_held():
                 return False
 
             # No keys are held, we are no longer expecting chord parts.
             self.children_keymappings = self.initial_parsed_keymappings
             return False
-
-        for keymapping in matched_keymappings.values():
-            print('keymapping', keymapping)
-            action = keymapping.get('action')
-
-            if not action:
-                debug_print('No action found!')
-                continue
-
-            action.exec()
 
         matched = filter(is_key_or_combination, matched_keymappings.keys())
         # print('matched', list(matched))
@@ -92,45 +79,98 @@ class KeymappingsLoop:
 
         return True
 
-    current_sequence = []
+    current_sequence_index = 0
+    current_sequence: List[Chord] = field(default_factory=list)
+
+    def send_current_sequence(self):
+        print('sequence:', self.current_sequence)
+        # Send all accumulated chords.
+        for i, chord in enumerate(self.current_sequence):
+            is_last = i == len(self.current_sequence) - 1
+
+            for key in chord:
+                # Hack for not registered windows key
+                #   [mr](https://github.com/boppreh/keyboard/pull/463/files).
+                if key.scan_codes == (91,):
+                    k.press('left windows')
+                    continue
+
+                k.press(key.scan_codes[0])
+
+            if not is_last:
+                for key in chord:
+                    # Hack for not registered windows key
+                    #   [mr](https://github.com/boppreh/keyboard/pull/463/files).
+                    if key.scan_codes == (91,):
+                        k.release('left windows')
+                        continue
+
+                    k.release(key.scan_codes[0])
+
 
     def on_press_hook(self, event: k.KeyboardEvent):
         debug_print('--------------------------------------')
-        debug_print('pressed:', event.name)
+        debug_print('pressed key:', event.name)
         key = Key.from_keyboard_event(event)
-        self.current_sequence.append(key)
-        matched_keymappings = self._match_keymappings(key, self.children_keymappings)
+        self.pressed.add(key)
+
+        debug_print('pressed', self.pressed)
+
+        debug_print('index:', self.current_sequence_index)
+        if self.current_sequence_index > len(self.current_sequence) - 1:
+            self.current_sequence.append(copy.deepcopy(self.pressed))
+
+        debug_print('current_sequence:', self.current_sequence)
+
+        matched_keymappings = self._match_keymappings(self.children_keymappings)
 
         #   No children combinations found, no keys are held, we are no longer
         # expecting chord parts.
         #   Maybe user started typing new sequence. Try again but on root level
         # if we are not already on root level.
-        if not matched_keymappings and not self._key_is_held() and len(self.current_sequence) > 1:
-            self.children_keymappings = self.initial_parsed_keymappings
+        if not matched_keymappings:
+            if not self._keys_are_held() and len(self.current_sequence) > 1:
+                self.children_keymappings = self.initial_parsed_keymappings
             
-            matched_keymappings = self._match_keymappings(key, self.children_keymappings)
+                self.send_current_sequence()
+                self.current_sequence_index = 0
+                self.current_sequence = []
 
-        # No keymappings found.
+            matched_keymappings = self._match_keymappings(self.children_keymappings)
+
+        # No next keymappings found.
         if not self._on_match_keymappings(matched_keymappings):
-            print('sequence:',self.current_sequence)
-            # Send all accumulated keys.
-            for key in self.current_sequence:
-                # Hack for not registered windows key
-                #   [mr](https://github.com/boppreh/keyboard/pull/463/files).
-                if key.scan_codes == (91,):
-                    return k.press('left windows')
+            self.send_current_sequence()
 
-                k.press(key.scan_codes[0])
-
+            self.current_sequence_index = 0
             self.current_sequence = []
+        else:
+            actionless = True
+            for keymapping in matched_keymappings.values():
+                print('keymapping', keymapping)
+                action = keymapping.get('action')
 
-            return
+                if not action:
+                    debug_print('No action found!')
+                    continue
+
+                actionless = False
+                action.exec()
+
+            if not actionless:
+                self.current_sequence_index = 0
+                self.current_sequence = []
+
+
 
     def on_release_hook(self, event: k.KeyboardEvent):
         key = Key.from_keyboard_event(event)
 
         if key in self.pressed:
             self.pressed.remove(key)
+
+        if len(self.pressed) == 0:
+            self.current_sequence_index += 1
 
         # Hack for not registered windows key
         #   [mr](https://github.com/boppreh/keyboard/pull/463/files).

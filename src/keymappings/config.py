@@ -57,16 +57,27 @@ import ctypes  # An included library with Python install.
 
 # At the moment of parsing.
 km.KEYMAPPINGS |= {
-    'ctrl+w': {
-        'action': Action(command=lambda: print('TEST')),
+    # 'ctrl+w': {
+    #     # 'action': Action(command=lambda: print('TEST')),
 
-        'ctrl+a': {
-            'action': Action(command=lambda: print('KEK')),
-        },
-    },
-    'o': {
-        'action': Action(command=lambda: print('OOO')),
-    },
+    #     'ctrl+a': {
+    #         'action': Action(command=lambda: print('KEK')),
+    #     },
+    # },
+    # 'o': {
+    #     'action': Action(command=lambda: print('OOO')),
+    # },
+    # 'f': {
+    #     'action': Action(command=lambda: print('f')),
+
+    #     't': {
+    #         'action': Action(command=lambda: print('f,t')),
+
+    #         'i': {
+    #             'action': Action(command=lambda: print('f,t,i')),
+    #         },
+    #     },
+    # },
     'ctrl+space': {
         'g': {
             'action': Action(command=lambda: run_if_process_does_not_exist('Chrome', 'chrome.exe')),
@@ -93,5 +104,17 @@ km.KEYMAPPINGS |= {
             'action': Action(command=lambda: print('Telegram!')),
         }
     },
+    'ctrl+[': {
+        'action': Action(command=lambda: k.send('esc')),
+    },
+   'ctrl+m': {
+        'action': Action(command=lambda: k.send('enter')),
+    },
+   'ctrl+l': {
+       'action': Action(command=lambda: k.send('ctrl+w,l')),
+   },
+   'ctrl+h': {
+       'action': Action(command=lambda: k.send('ctrl+w,h')),
+   },
 }
 
