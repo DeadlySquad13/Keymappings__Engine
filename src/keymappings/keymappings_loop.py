@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from functools import reduce
 from typing import List, Set
 import keyboard as k
-import copy
+from queue import SimpleQueue
 
 from keymappings.debug import debug_print
 from keymappings.key import Key
@@ -78,17 +78,20 @@ class KeymappingsLoop:
 
         return True
 
-    current_sequence_index = 0
-    current_sequence: List[Chord] = field(default_factory=list)
+    current_sequence: SimpleQueue[Chord] = field(default_factory=SimpleQueue)
+
+    def send_sequence_element(self, sequence: SimpleQueue[Chord]):
+        is_last = sequence.qsize() == 1
+        chord = sequence.get()
+        print('sequence element', chord)
+        chord.send(press=True, release=not is_last)
+
+    def send_sequence(self, sequence: SimpleQueue[Chord]):
+        while sequence.qsize() > 1:
+            self.send_sequence_element(sequence)
 
     def send_current_sequence(self):
-        print('sequence:', self.current_sequence)
-        # Send all accumulated chords.
-        for i, chord in enumerate(self.current_sequence):
-            is_last = i == len(self.current_sequence) - 1
-
-            chord.send(press=True, release=not is_last)
-
+        self.send_sequence(self.current_sequence)
 
     def on_press_hook(self, event: k.KeyboardEvent):
         debug_print('--------------------------------------')
@@ -98,9 +101,7 @@ class KeymappingsLoop:
 
         debug_print('pressed', self.pressed)
 
-        debug_print('index:', self.current_sequence_index)
-        if self.current_sequence_index > len(self.current_sequence) - 1:
-            self.current_sequence.append(Chord(copy.deepcopy(self.pressed)))
+        self.current_sequence.put(key)
 
         debug_print('current_sequence:', self.current_sequence)
 
@@ -108,24 +109,21 @@ class KeymappingsLoop:
 
         #   No children combinations found, no keys are held, we are no longer
         # expecting chord parts.
-        #   Maybe user started typing new sequence. Try again but on root level
-        # if we are not already on root level.
         if not matched_keymappings:
-            if not self._keys_are_held() and len(self.current_sequence) > 1:
-                self.children_keymappings = self.initial_parsed_keymappings
-            
-                self.send_current_sequence()
-                self.current_sequence_index = 0
-                self.current_sequence = []
-
-            matched_keymappings = self._match_keymappings(self.children_keymappings)
-
-        # No next keymappings found.
-        if not self._on_match_keymappings(matched_keymappings):
             self.send_current_sequence()
 
-            self.current_sequence_index = 0
-            self.current_sequence = []
+            sequence_is_degenerate = self.current_sequence.qsize() < 2
+
+            if sequence_is_degenerate and self._keys_are_held():
+                self.children_keymappings = self.initial_parsed_keymappings
+
+            #   Maybe user started typing new sequence. Try again but on root level
+            # if we are not already on root level.
+            matched_keymappings = self._match_keymappings(self.children_keymappings)
+        
+        # No next keymappings found.
+        if not self._on_match_keymappings(matched_keymappings):
+            self.send_sequence_element(self.current_sequence)
         else:
             actionless = True
             for keymapping in matched_keymappings.values():
@@ -140,8 +138,8 @@ class KeymappingsLoop:
                 action.exec()
 
             if not actionless:
-                self.current_sequence_index = 0
-                self.current_sequence = []
+                while not self.current_sequence.empty():
+                    self.current_sequence.get()
 
 
     def on_release_hook(self, event: k.KeyboardEvent):
@@ -149,9 +147,6 @@ class KeymappingsLoop:
 
         if key in self.pressed:
             self.pressed.remove(key)
-
-        if len(self.pressed) == 0:
-            self.current_sequence_index += 1
 
         key.release()
 

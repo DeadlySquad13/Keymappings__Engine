@@ -33,6 +33,13 @@ class Key:
 
         k.release(self.scan_codes[0])
 
+    def send(self, press=True, release=True):
+        if press:
+            self.press()
+
+        if release:
+            self.release()
+
     def __str__(self) -> str:
         return f'{{name: {self.name}, scan_codes: {self.scan_codes}}}'
 
