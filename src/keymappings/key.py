@@ -17,6 +17,22 @@ class Key:
     def scan_codes(self):
         return self._scan_codes
 
+    def press(self):
+        # Hack for not registered windows key
+        #   [mr](https://github.com/boppreh/keyboard/pull/463/files).
+        if self.scan_codes == (91,):
+            return k.press('left windows')
+
+        k.press(self.scan_codes[0])
+
+    def release(self):
+        # Hack for not registered windows key
+        #   [mr](https://github.com/boppreh/keyboard/pull/463/files).
+        if self.scan_codes == (91,):
+            return k.release('left windows')
+
+        k.release(self.scan_codes[0])
+
     def __str__(self) -> str:
         return f'{{name: {self.name}, scan_codes: {self.scan_codes}}}'
 

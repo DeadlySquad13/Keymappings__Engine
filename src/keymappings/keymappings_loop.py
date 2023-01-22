@@ -52,7 +52,6 @@ class KeymappingsLoop:
 
         return matched_keymappings
 
-
     def _on_match_keymappings(self, matched_keymappings):
         # No keymappings found.
         if not matched_keymappings:
@@ -88,24 +87,7 @@ class KeymappingsLoop:
         for i, chord in enumerate(self.current_sequence):
             is_last = i == len(self.current_sequence) - 1
 
-            for key in chord:
-                # Hack for not registered windows key
-                #   [mr](https://github.com/boppreh/keyboard/pull/463/files).
-                if key.scan_codes == (91,):
-                    k.press('left windows')
-                    continue
-
-                k.press(key.scan_codes[0])
-
-            if not is_last:
-                for key in chord:
-                    # Hack for not registered windows key
-                    #   [mr](https://github.com/boppreh/keyboard/pull/463/files).
-                    if key.scan_codes == (91,):
-                        k.release('left windows')
-                        continue
-
-                    k.release(key.scan_codes[0])
+            chord.send(press=True, release=not is_last)
 
 
     def on_press_hook(self, event: k.KeyboardEvent):
@@ -118,7 +100,7 @@ class KeymappingsLoop:
 
         debug_print('index:', self.current_sequence_index)
         if self.current_sequence_index > len(self.current_sequence) - 1:
-            self.current_sequence.append(copy.deepcopy(self.pressed))
+            self.current_sequence.append(Chord(copy.deepcopy(self.pressed)))
 
         debug_print('current_sequence:', self.current_sequence)
 
@@ -162,7 +144,6 @@ class KeymappingsLoop:
                 self.current_sequence = []
 
 
-
     def on_release_hook(self, event: k.KeyboardEvent):
         key = Key.from_keyboard_event(event)
 
@@ -172,12 +153,7 @@ class KeymappingsLoop:
         if len(self.pressed) == 0:
             self.current_sequence_index += 1
 
-        # Hack for not registered windows key
-        #   [mr](https://github.com/boppreh/keyboard/pull/463/files).
-        if key.scan_codes == (91,):
-            return k.release('left windows')
-
-        k.release(key.scan_codes[0])
+        key.release()
 
     def on_event(self, event: k.KeyboardEvent):
         if event.event_type == 'down':
