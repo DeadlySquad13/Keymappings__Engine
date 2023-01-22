@@ -1,0 +1,12 @@
+flowchart TB
+A[Key was pressed] --> on_press_hook --> B[match_keymappings]
+B --> C{Matched something?}
+
+C -->|Yes| Success[At least one matched mapping has action?]
+C -->|No| Send["Send all keys except last (prelast should be just pressed)"]-- Match with 0 layer of keymappings--> Failure{Maybe last key is a start of new mapping?}
+
+Success --> |Yes| Actionable[Clear queue]
+Success --> |No| NonActionable[End]
+
+Failure -->|Yes| Success
+Failure -->|No| TotalFailure[Press last key]
