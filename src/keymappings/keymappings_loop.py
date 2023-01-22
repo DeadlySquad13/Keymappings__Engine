@@ -65,10 +65,6 @@ class KeymappingsLoop:
             return False
 
         matched = filter(is_key_or_combination, matched_keymappings.keys())
-        # print('matched', list(matched))
-        # debug_print('children', self.children_keymappings)
-
-        # debug_print('children', self.children_keymappings)
 
         self.children_keymappings: dict = reduce(
                 lambda accumulator, match: accumulator | self.children_keymappings[match],
@@ -114,12 +110,13 @@ class KeymappingsLoop:
 
             sequence_is_degenerate = self.current_sequence.qsize() < 2
 
-            if sequence_is_degenerate and self._keys_are_held():
+            # if sequence_is_degenerate and self._keys_are_held():
+            if self.children_keymappings != self.initial_parsed_keymappings:
                 self.children_keymappings = self.initial_parsed_keymappings
 
-            #   Maybe user started typing new sequence. Try again but on root level
-            # if we are not already on root level.
-            matched_keymappings = self._match_keymappings(self.children_keymappings)
+                #   Maybe user started typing new sequence. Try again but on root level
+                # if we are not already on root level.
+                matched_keymappings = self._match_keymappings(self.children_keymappings)
         
         # No next keymappings found.
         if not self._on_match_keymappings(matched_keymappings):
