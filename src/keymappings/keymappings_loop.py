@@ -7,6 +7,7 @@ from queue import SimpleQueue
 from keymappings.debug import debug_print
 from keymappings.key import Key
 from keymappings.chord import Chord
+from keymappings.sequence import Sequence
 
 def is_key_or_combination(value):
     # Make regex to check if it's a key instead of checking fields?
@@ -52,7 +53,7 @@ class KeymappingsLoop:
 
         return matched_keymappings
 
-    def _on_match_keymappings(self, matched_keymappings):
+    def _have_subkeymappings(self, matched_keymappings):
         # No keymappings found.
         if not matched_keymappings:
             #   Some key is held, wait until it's released. Maybe next key will
@@ -74,20 +75,7 @@ class KeymappingsLoop:
 
         return True
 
-    current_sequence: SimpleQueue[Chord] = field(default_factory=SimpleQueue)
-
-    def send_sequence_element(self, sequence: SimpleQueue[Chord]):
-        is_last = sequence.qsize() == 1
-        chord = sequence.get()
-        print('sequence element', chord)
-        chord.send(press=True, release=not is_last)
-
-    def send_sequence(self, sequence: SimpleQueue[Chord]):
-        while sequence.qsize() > 1:
-            self.send_sequence_element(sequence)
-
-    def send_current_sequence(self):
-        self.send_sequence(self.current_sequence)
+    current_sequence: Sequence = field(default_factory=Sequence)
 
     def on_press_hook(self, event: k.KeyboardEvent):
         debug_print('--------------------------------------')
@@ -106,9 +94,7 @@ class KeymappingsLoop:
         #   No children combinations found, no keys are held, we are no longer
         # expecting chord parts.
         if not matched_keymappings:
-            self.send_current_sequence()
-
-            sequence_is_degenerate = self.current_sequence.qsize() < 2
+            self.current_sequence.send_all_elements()
 
             # if sequence_is_degenerate and self._keys_are_held():
             if self.children_keymappings != self.initial_parsed_keymappings:
@@ -119,8 +105,8 @@ class KeymappingsLoop:
                 matched_keymappings = self._match_keymappings(self.children_keymappings)
         
         # No next keymappings found.
-        if not self._on_match_keymappings(matched_keymappings):
-            self.send_sequence_element(self.current_sequence)
+        if not self._have_subkeymappings(matched_keymappings):
+            self.current_sequence.send_element()
         else:
             actionless = True
             for keymapping in matched_keymappings.values():

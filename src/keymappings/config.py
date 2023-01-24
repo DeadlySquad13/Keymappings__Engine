@@ -53,7 +53,17 @@ km.add_keymappings([
 ])
 
 import ctypes  # An included library with Python install.
+def esc():
+    k.release('ctrl')
+    k.send('esc')
 
+def enter():
+    k.release('ctrl')
+    k.send('enter')
+
+# TODO: Currently not only for neovide...
+def change_window_for_neovide():
+    k.send('ctrl+shift+6')
 
 # At the moment of parsing.
 km.KEYMAPPINGS |= {
@@ -68,7 +78,7 @@ km.KEYMAPPINGS |= {
     #     'action': Action(command=lambda: print('OOO')),
     # },
     # 'f': {
-    #     'action': Action(command=lambda: print('f')),
+    #     # 'action': Action(command=lambda: print('f')),
 
     #     't': {
     #         'action': Action(command=lambda: print('f,t')),
@@ -105,10 +115,13 @@ km.KEYMAPPINGS |= {
         }
     },
     'ctrl+[': {
-        'action': Action(command=lambda: k.send('esc')),
+        'action': Action(command=esc),
     },
    'ctrl+m': {
-        'action': Action(command=lambda: k.send('enter')),
+        'action': Action(command=enter),
+    },
+   'ctrl+^': {
+        'action': Action(command=change_window_for_neovide),
     },
    'ctrl+l': {
        'action': Action(command=lambda: k.send('ctrl+w,l')),
